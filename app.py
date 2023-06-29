@@ -9,5 +9,6 @@ app.include_router(main_router(phase_id=2, prob_ids=[1,2]))
 if __name__ == "__main__":
     uvicorn.run(
         "app:app",
+        host="0.0.0.0",
         port=1234
     )

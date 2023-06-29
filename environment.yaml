@@ -1,0 +1,8 @@
+name: MLOps
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - fastapi
+  - uvicorn
+  - pandas
