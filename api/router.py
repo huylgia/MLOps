@@ -4,7 +4,7 @@ from .func import store_data
 
 def request(router: APIRouter, phase_id: int=1, prob_id: int=1)->None:
     @router.post(f"/prob-{prob_id}/predict")
-    async def run(id: int, columns: List[str], rows: List[List[float]]):
+    async def run(id: str, columns: List[str], rows: List[List[float]]):
         return await store_data(
             id=id,
             columns=columns,

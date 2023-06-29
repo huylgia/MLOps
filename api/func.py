@@ -8,12 +8,12 @@ __DIR__ = pathlib.Path(__file__).parent
 
 @dataclass
 class Output:
-    id: int
+    id: str
     predictions: List[float]
     drift: int
 
 
-async def store_data(id: int, columns: List[str], rows: List[List[float]], phase: str="phase-1", problem: str="prob-1") -> Output:
+async def store_data(id: str, columns: List[str], rows: List[List[float]], phase: str="phase-1", problem: str="prob-1") -> Output:
     store_dir = __DIR__.parent/"store_data"/phase/problem
     store_dir.mkdir(exist_ok=True, parents=True)
 
@@ -33,7 +33,7 @@ async def store_data(id: int, columns: List[str], rows: List[List[float]], phase
 
     return output
 
-async def predict(id: int, columns: List[str], rows: List[List[float]]) -> Output:
+async def predict(id: str, columns: List[str], rows: List[List[float]]) -> Output:
     output = Output(
         id=id,
         predictions=[1.0 for _ in range(len(rows))],
