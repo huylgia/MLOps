@@ -1,14 +1,19 @@
 from typing import List
 from fastapi import APIRouter
+from pydantic import BaseModel
+
 from .func import store_data
+
+class Item(BaseModel):
+    id: str
+    columns: List[str]
+    rows: List[List[float]]
 
 def request(router: APIRouter, phase_id: int=1, prob_id: int=1)->None:
     @router.post(f"/prob-{prob_id}/predict")
-    async def run(id: str, columns: List[str], rows: List[List[float]]):
+    async def run(item: Item):
         return await store_data(
-            id=id,
-            columns=columns,
-            rows=rows, 
+            **item.__dict__,
             phase=f"phase-{phase_id}",
             problem=f"prob-{prob_id}"
         )
