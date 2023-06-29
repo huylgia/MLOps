@@ -10,11 +10,11 @@ __DIR__ = pathlib.Path(__file__).parent
 class Output:
     id: int
     predictions: List[float]
-    drift: List[int]
+    drift: int
 
 
-async def store_data(id: int, columns: List[str], rows: List[List[float]], pharse: str="pharse-1", problem: str="prob-1") -> Output:
-    store_dir = __DIR__.parent/"store_data"/pharse/problem
+async def store_data(id: int, columns: List[str], rows: List[List[float]], phase: str="phase-1", problem: str="prob-1") -> Output:
+    store_dir = __DIR__.parent/"store_data"/phase/problem
     store_dir.mkdir(exist_ok=True, parents=True)
 
     # file to store data
@@ -28,7 +28,7 @@ async def store_data(id: int, columns: List[str], rows: List[List[float]], phars
     output = Output(
         id=id,
         predictions=[1.0 for _ in range(len(rows))],
-        drift=[0 for _ in range(len(rows))]
+        drift=0
     )
 
     return output
