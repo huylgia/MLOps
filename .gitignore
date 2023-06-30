@@ -2,3 +2,4 @@ __pycache__/
 .vscode/
 store_data/
 samples/
+logger/
