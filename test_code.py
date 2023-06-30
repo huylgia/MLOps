@@ -49,6 +49,7 @@ def run(phase: str, problem: str):
 
         print(f"{request_id}: {is_drift}\t{execute_time} seconds")
         
-
+        break
+    
 if __name__ == "__main__":
-    run("phase-1", "prob-1")
+    # run("phase-1", "prob-1")
