@@ -1,7 +1,7 @@
 from datetime import datetime
 import pathlib
 import pandas as pd
-from typing import List
+from typing import List, Any
 from dataclasses import dataclass
 
 __DIR__ = pathlib.Path(__file__).parent
@@ -13,7 +13,7 @@ class Output:
     drift: int
 
 
-async def store_data(id: str, columns: List[str], rows: List[List[float]], phase: str="phase-1", problem: str="prob-1") -> Output:
+async def store_data(id: str, columns: List[str], rows: List[List[Any]], phase: str="phase-1", problem: str="prob-1") -> Output:
     current = datetime.now()
     
     # create store dir
@@ -36,7 +36,7 @@ async def store_data(id: str, columns: List[str], rows: List[List[float]], phase
 
     return output
 
-async def predict(id: str, columns: List[str], rows: List[List[float]]) -> Output:
+async def predict(id: str, columns: List[str], rows: List[List[Any]]) -> Output:
     output = Output(
         id=id,
         predictions=[1.0 for _ in range(len(rows))],
