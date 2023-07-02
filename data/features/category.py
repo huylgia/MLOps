@@ -1,20 +1,38 @@
 import pandas
-from typing import List, Mapping, Tuple
+from typing import List, Mapping
 
-def build_category_map(df: pandas.DataFrame, category_columns: List[str]) -> Tuple[pandas.DataFrame, Mapping[str, List[str]]]:
-    category_map: Mapping[str, List[str]]={}
+class CategoryTransformer:
+    def __init__(self):
+        self.columns: List[str]=[]
+        self.mapping: Mapping[str, List[str]]={}
 
-    for col in category_columns:
-        # convert object to category
-        df[col] = df[col].astype("category")
-
-        # define category map
-        category_map[col] = df[col].cat.categories
-    
-        # mapping string to index
-        df[col] = df[col].cat.codes
+    def transform(self, df: pandas.DataFrame, column: str, is_onehot: bool=False):
+        # get category map 
+        category_map = self.mapping[column]
         
-    return df, category_map
+        # tranform category into index
+        df[column] = df[column].apply(lambda x: category_map.index(x) if x in category_map else -1)
+
+        # onehot encoding
+        if is_onehot:
+            onehot = pandas.get_dummies(df[column], prefix=column)
+            onehot = onehot.astype(int)
+
+            # drop category column and add onehot
+            df = df.drop(columns=[column])
+            df = pandas.concat([df, onehot], axis=1)
+
+        return df
+    
+    def get_category_index(self, df: pandas.DataFrame, column: str):
+        # convert object to category
+        df[column] = df[column].astype("category")
+
+        # get category index
+        self.mapping[column] = df[column].cat.categories.tolist()
+
+        if column not in self.columns:
+            self.columns.append(column)
 
 
 
