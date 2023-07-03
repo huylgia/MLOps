@@ -1,2 +1,2 @@
-from .func import store_data, predict
+from .func import predict
 from .router import main_router

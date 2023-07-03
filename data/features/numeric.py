@@ -15,7 +15,7 @@ class NumericTransformer:
     def transform(self, df: pd.DataFrame, column: str, **kwargs) -> pd.DataFrame:
         # get distribution
         distribution: Distribution=self.distribution[column]
-
+        
         # do transform
         df[column] = df[column].apply(lambda x: (x - distribution.mean)/distribution.std)
 

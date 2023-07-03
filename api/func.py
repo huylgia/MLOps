@@ -1,10 +1,14 @@
 from datetime import datetime
-import pathlib
+import pathlib, sys
+__DIR__ = pathlib.Path(__file__).parent
+sys.path.append(__DIR__.parent)
+
 import pandas as pd
 from typing import List, Any
 from dataclasses import dataclass
 
-__DIR__ = pathlib.Path(__file__).parent
+import numpy as np
+from tools.predict import Predictor
 
 @dataclass
 class Output:
@@ -12,12 +16,12 @@ class Output:
     predictions: List[float]
     drift: int
 
-
-async def store_data(id: str, columns: List[str], rows: List[List[Any]], phase: str="phase-1", problem: str="prob-1") -> Output:
+async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor: Predictor,
+                    phase: str="phase-1", problem: str="prob-1") -> Output:
     current = datetime.now()
     
     # create store dir
-    store_dir = __DIR__.parent/"store_data"/phase/problem/f"{current.month}_{current.day}_{current.hour}_{current.minute}"
+    store_dir = __DIR__.parent/"samples"/phase/problem/"test"/f"{current.month}_{current.day}_{current.hour}_{current.minute}"
     store_dir.mkdir(exist_ok=True, parents=True)
 
     # file to store data
@@ -28,20 +32,13 @@ async def store_data(id: str, columns: List[str], rows: List[List[Any]], phase: 
     data.to_csv(csv_file, index=None)
 
     # output to return
+    predictions = predictor(data)    
     output = Output(
         id=id,
-        predictions=[1.0 for _ in range(len(rows))],
-        drift=0
+        predictions=np.squeeze(predictions).tolist(),
+        drift=1
     )
 
     return output
 
-async def predict(id: str, columns: List[str], rows: List[List[Any]]) -> Output:
-    output = Output(
-        id=id,
-        predictions=[1.0 for _ in range(len(rows))],
-        drift=[0 for _ in range(len(rows))]
-    )
-
-    return output
 

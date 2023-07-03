@@ -8,7 +8,7 @@ from utils import build_logger
 LOGGER = build_logger("logger", "error")
 
 app = FastAPI()
-app.include_router(main_router(phase_id=1, prob_ids=[1,2]))
+# app.include_router(main_router(phase_id=1, prob_ids=[1,2]))
 app.include_router(main_router(phase_id=2, prob_ids=[1,2]))
 
 @app.exception_handler(RequestValidationError)
