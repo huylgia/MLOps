@@ -13,7 +13,7 @@ from tools.predict import Predictor
 @dataclass
 class Output:
     id: str
-    predictions: List[float]
+    predictions: List[Any]
     drift: int
 
 async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor: Predictor,
@@ -32,13 +32,14 @@ async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor:
     data.to_csv(csv_file, index=None)
 
     # output to return
-    predictions = predictor(data)    
+    is_drift, predictions = predictor(data)    
     output = Output(
         id=id,
         predictions=np.squeeze(predictions).tolist(),
-        drift=1
+        drift=int(is_drift)
     )
 
+    print(output)
     return output
 
 

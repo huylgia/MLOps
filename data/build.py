@@ -9,40 +9,43 @@ from .drift import StatTest
 
 class DataLoader:
     def __init__(self, work_dir: Path, data_name: str="raw_train.parquet", features_config_name: str="features_config.json") -> None:
+        # create drift detector
+        self.stattest = StatTest()
+
+        # create transformer
         self.transformer = {
             "category": CategoryTransformer(),
             "numeric": NumericTransformer()
         }
 
+        # get some info from dataset
         self.work_dir  = work_dir
         self.data_file = work_dir/"train"/data_name
         self.features_config_file = work_dir/"train"/features_config_name
 
-        self.stattest = StatTest()
+        # get feature config
+        feature_cfg_str = self.features_config_file.read_text()
+        self.feature_config = ast.literal_eval(feature_cfg_str)
+
+        # get data
+        self.data = pd.read_parquet(str(self.data_file), engine='pyarrow')
 
     def __call__(self) -> Tuple[*NDArray]:
         self.call()
 
-    def call(self) -> Tuple[*NDArray]:
-        # get feature config
-        feature_cfg_str = self.features_config_file.read_text()
-        feature_cfg = ast.literal_eval(feature_cfg_str)
-
-        # get data
-        data = pd.read_parquet(str(self.data_file), engine='pyarrow')
-
+    def call(self) -> Tuple[*NDArray]:        
         # transform
-        data = self.transform(data=data, feature_config=feature_cfg)
+        data = self.transform(data=self.data, feature_config=self.feature_config)
 
         # split dataset
         init_random_state = 10
         while True:
-            X_train, X_val, Y_train, Y_val = self.split_data(data=data, target_column=feature_cfg['target_column'], test_size=0.2, random_state=init_random_state)
+            X_train, X_val, Y_train, Y_val = self.split_data(data=data, target_column=self.feature_config['target_column'], test_size=0.2, random_state=init_random_state)
 
             _, drift_data_score = self.stattest.detect_drift_data(
                 reference_df=pd.DataFrame(X_train, columns=data.columns[:-1]),
                 current_df=pd.DataFrame(X_val, columns=data.columns[:-1]),
-                feature_config=feature_cfg
+                feature_config=self.feature_config
             )
 
             if drift_data_score > 0:
