@@ -17,8 +17,9 @@ class NumericTransformer:
         distribution: Distribution=self.distribution[column]
         
         # do transform
-        df[column] = df[column].apply(lambda x: (x - distribution.mean)/distribution.std)
-
+        df[column] -= distribution.mean
+        df[column] /= distribution.std
+        
         return df
     
     def get_numeric_distribution(self, df: pd.DataFrame, column: str):

@@ -10,7 +10,7 @@ def main():
     data.drop(columns=["label"], inplace=True)
 
     requests.post(
-        "http://localhost:1234/phase-2/prob-1/predict",
+        "http://58.187.115.16:1234/phase-2/prob-1/predict",
         json={
             "id": "0",
             "columns": data.columns.tolist(),

@@ -1,1 +1,1 @@
-from .evidently_checker import *
+from .stattest import StatTest

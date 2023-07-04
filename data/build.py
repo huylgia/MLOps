@@ -5,6 +5,7 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from numpy.typing import NDArray
 from .features import CategoryTransformer, NumericTransformer, save_tranformer
+from .drift import StatTest
 
 class DataLoader:
     def __init__(self, work_dir: Path, data_name: str="raw_train.parquet", features_config_name: str="features_config.json") -> None:
@@ -16,7 +17,9 @@ class DataLoader:
         self.work_dir  = work_dir
         self.data_file = work_dir/"train"/data_name
         self.features_config_file = work_dir/"train"/features_config_name
-    
+
+        self.stattest = StatTest()
+
     def __call__(self) -> Tuple[*NDArray]:
         self.call()
 
@@ -32,7 +35,20 @@ class DataLoader:
         data = self.transform(data=data, feature_config=feature_cfg)
 
         # split dataset
-        X_train, X_val, Y_train, Y_val = self.split_data(data=data, target_column=feature_cfg['target_column'], test_size=0.2)
+        init_random_state = 10
+        while True:
+            X_train, X_val, Y_train, Y_val = self.split_data(data=data, target_column=feature_cfg['target_column'], test_size=0.2, random_state=init_random_state)
+
+            _, drift_data_score = self.stattest.detect_drift_data(
+                reference_df=pd.DataFrame(X_train, columns=data.columns[:-1]),
+                current_df=pd.DataFrame(X_val, columns=data.columns[:-1]),
+                feature_config=feature_cfg
+            )
+
+            if drift_data_score > 0:
+                init_random_state *= 2
+            else:
+                break
 
         return X_train, X_val, Y_train, Y_val
 
@@ -67,11 +83,11 @@ class DataLoader:
 
         return data
     
-    def split_data(self, data: pd.DataFrame, target_column: str, test_size: float=0.2) -> Tuple[*NDArray]:
-        data = data.sample(frac=1, random_state=42)
+    def split_data(self, data: pd.DataFrame, target_column: str, test_size: float=0.2, random_state=42) -> Tuple[*NDArray]:
+        data = data.sample(frac=1, random_state=random_state)
         
         # get X, Y
         Y = data[target_column].values
         X = data.drop(columns=[target_column]).values
 
-        return train_test_split(X, Y, test_size=test_size, random_state=42)    
+        return train_test_split(X, Y, test_size=test_size, random_state=random_state)    
