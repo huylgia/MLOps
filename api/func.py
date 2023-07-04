@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from tools.predict import Predictor
+import json
 
 @dataclass
 class Output:
@@ -16,8 +17,7 @@ class Output:
     predictions: List[Any]
     drift: int
 
-async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor: Predictor,
-                    phase: str="phase-1", problem: str="prob-1") -> Output:
+def store_data(id: str, columns: List[str], rows: List[List[Any]], phase: str="phase-1", problem: str="prob-1"):
     current = datetime.now()
     
     # create store dir
@@ -25,11 +25,18 @@ async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor:
     store_dir.mkdir(exist_ok=True, parents=True)
 
     # file to store data
-    csv_file = f"{store_dir}/{id}.csv"
+    json_file = store_dir/f"{id}.json"
+    data = {
+        'id': id,
+        'columns': columns,
+        'rows': rows,
+    }
     
-    # create data
+    obj = json.dumps(data, indent=4)
+    json_file.write_text(obj)
+    
+async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor: Predictor) -> Output:
     data = pd.DataFrame(rows, columns=columns)
-    data.to_csv(csv_file, index=None)
 
     # output to return
     is_drift, predictions = predictor(data)    
@@ -39,7 +46,6 @@ async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor:
         drift=int(is_drift)
     )
 
-    print(output)
     return output
 
 

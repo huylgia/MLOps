@@ -46,8 +46,8 @@ class Predictor:
     def predict(self, X: NDArray):
         return self.model.predict(
             X,
-            thread_count=2,
-            verbose=True,
+            thread_count=3,
+            verbose=False,
             task_type='CPU'
         )
     
