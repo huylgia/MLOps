@@ -15,19 +15,22 @@ class Trainer:
     def initialize(self):
         self.model: CatBoostClassifier = eval(self.model_name)(**self.args)
 
-    def train(self, X_train, Y_train, X_val, Y_val):
+    def train(self, X_train, Y_train, X_val, Y_val, cat_features):
         train_dataset = Pool(
             data=X_train,
             label=Y_train,
+            cat_features=cat_features
         )
 
         val_dataset = Pool(
             data=X_val,
             label=Y_val,
+            cat_features=cat_features
+
         )
 
         self.model.fit(
             train_dataset,
             eval_set=val_dataset,
-            verbose=False
+            verbose=True
         )    

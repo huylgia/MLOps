@@ -11,13 +11,13 @@ def main():
 
     args = dict(
         url="http://localhost:1234/phase-2/prob-2/predict",
-        json={
+        json={  
             "id": "0",
             "columns": data.columns.tolist(),
             "rows": data.values[:1000].tolist()
         }
     )
-    t = measure_execute_time(requests.post, args=args, loop=100)
+    t = measure_execute_time(requests.post, args=args, loop=10)
     print(t)
 
 main()

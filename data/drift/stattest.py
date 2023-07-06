@@ -1,4 +1,4 @@
-from typing import Tuple, Dict
+from typing import Tuple, Mapping, List, Any, Dict
 import numpy as np
 
 import pandas as pd
@@ -7,52 +7,59 @@ from scipy.spatial import distance
 
 from .utils import get_binned_data
 
+
 class StatTest:
     def __init__(self, drift_data_threshold=0.5, drift_column_threshold: float=0.1) -> None:
         self.drift_column_threshold = drift_column_threshold
         self.drift_data_threshold   = drift_data_threshold
 
-    def detect_drift_data(self, reference_df: pd.DataFrame, current_df: pd.DataFrame, feature_config: Dict) -> Tuple[bool,float]:
-        keys = ['numeric_columns', 'category_columns']
-
-        total_column = 0
+    def detect_drift_data(
+            self, 
+            reference_data: Mapping[str, List[Any]],
+            current_data: Mapping[str, List[Any]],
+            feature_config: Dict
+        ) -> Tuple[bool,float]:
         total_column_drift = 0
-        for key in keys:
-            feature_type = key[:3]
 
-            for column in feature_config[key]:
-                if feature_type == "cat":
-                    reference_df[column] = reference_df[column].astype("category") 
-                    current_df[column] = current_df[column].astype("category") 
-                else:
-                    reference_df[column] = pd.to_numeric(reference_df[column])
-                    current_df[column] = pd.to_numeric(current_df[column])
+        total_column = len(reference_data.keys())
 
-                _, is_drift = self.detect_drift_column(
-                    reference_data=reference_df[column],
-                    current_data=current_df[column],
-                    feature_type=feature_type
-                )
-                
-                total_column += 1
-                total_column_drift += 1 if is_drift else 0
+        # numeric column
+        for column in feature_config['numeric_columns']:
+            if column not in reference_data and column not in current_data:
+                continue
+            
+            _, is_drift = self.detect_drift_column(
+                    reference_data=reference_data[column],
+                    current_data=current_data[column],
+                    feature_type="num"
+            )
+            
+            total_column_drift += 1 if is_drift else 0
+            if total_column_drift/total_column >= self.drift_data_threshold:
+                return True
+        
+        # category column
+        for column in feature_config['category_columns']:
+            if column not in reference_data and column not in current_data:
+                continue
+           
+            _, is_drift = self.detect_drift_column(
+                    reference_data=reference_data[column],
+                    current_data=current_data[column],
+                    feature_type="cat"
+            )
 
-        drift_data_score = total_column_drift/total_column
+            total_column_drift += 1 if is_drift else 0
+            if total_column_drift/total_column >= self.drift_data_threshold:
+                return True
 
-        if drift_data_score >= self.drift_data_threshold:
-            return True, drift_data_score
-        else:
-            return False, drift_data_score
+        return False
+ 
                
-    def detect_drift_column(self, reference_data: pd.Series, current_data: pd.Series, feature_type: str):
-        n_values = pd.concat([reference_data, current_data]).nunique()
-
+    def detect_drift_column(self, reference_data: List[Any], current_data: List[Any], feature_type: str):
         # get statest based on feature type
         if feature_type == "num":
-            if n_values <= 5:
-                stattest = self._jensenshannon
-            else:
-                stattest = self._wasserstein_distance_norm
+            stattest = self._wasserstein_distance_norm
         
         elif feature_type == "cat":
             stattest = self._jensenshannon
@@ -64,14 +71,13 @@ class StatTest:
         drift_score, is_drift = stattest(
             reference_data=reference_data, 
             current_data=current_data,
-            feature_type=feature_type,
             threshold=self.drift_column_threshold
         )
 
         return drift_score, is_drift
     
     @staticmethod
-    def _jensenshannon(reference_data: pd.Series, current_data: pd.Series, feature_type: str, threshold: float, n_bins: int = 30) -> Tuple[float, bool]:
+    def _jensenshannon(reference_data: List[Any], current_data: List[Any], threshold: float) -> Tuple[float, bool]:
         """Compute the Jensen-Shannon distance between two arrays
         Args:
             reference_data: reference data
@@ -83,13 +89,13 @@ class StatTest:
             jensenshannon: calculated Jensen-Shannon distance
             test_result: whether the drift is detected
         """
-        reference_percents, current_percents = get_binned_data(reference_data, current_data, feature_type, n_bins, False)
+        reference_percents, current_percents = get_binned_data(reference_data, current_data, False)
         
         jensenshannon_value = distance.jensenshannon(reference_percents, current_percents)
         return jensenshannon_value, jensenshannon_value >= threshold
 
     @staticmethod
-    def _wasserstein_distance_norm(reference_data: pd.Series, current_data: pd.Series, feature_type: str, threshold: float) -> Tuple[float, bool]:
+    def _wasserstein_distance_norm(reference_data: List[Any], current_data: List[Any], threshold: float) -> Tuple[float, bool]:
         """Compute the first Wasserstein distance between two arrays normed by std of reference data
         Args:
             reference_data: reference data

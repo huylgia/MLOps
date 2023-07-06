@@ -7,7 +7,9 @@ from numpy.typing import NDArray
 
 import pickle, ast
 import pandas as pd
-from data import load_tranformer, StatTest
+import numpy as np
+from data import StatTest
+from catboost import CatBoostClassifier, Pool
 
 class Predictor:
     def __init__(self, phase: str, problem: str,  model_name: str="CatBoostClassifier") -> None:
@@ -18,56 +20,40 @@ class Predictor:
 
         # model
         f = (self.work_dir/"model"/model_name/"model.pickle").open(mode="rb")
-        self.model = pickle.load(f)
+        self.model: CatBoostClassifier = pickle.load(f)
 
-        # get transformer
-        self.category_transformer = load_tranformer(self.work_dir/"transformer", "category_transformer")
-        self.numeric_transformer = load_tranformer(self.work_dir/"transformer", "numeric_transformer")
-
+        # feature config
+        feature_config = (self.work_dir/"train"/"features_config.json").read_text()
+        self.feature_config = ast.literal_eval(feature_config)
+        
         # get importance feature
         self.important_features = (self.work_dir/"model"/model_name/"feature_columns.txt").read_text().split("\n")
 
-        # get feature config
-        self.feature_config = {
-            "numeric_columns": [col for col in self.important_features if col in self.numeric_transformer.columns],
-            "category_columns": [col for col in self.important_features if col in self.category_transformer.columns]
-        }
-
         # refenence data
         self.reference_data = pd.read_parquet(str(self.work_dir/"train"/"raw_train.parquet"), engine="pyarrow")[self.important_features]
+        self.reference_data = {column: self.reference_data[column].values.tolist() for column in self.reference_data.columns if column in self.important_features}
 
-    def __call__(self, df: pd.DataFrame) -> Tuple[bool, NDArray]:
-        df = df[self.important_features]
-        is_drift, drift_score = self.detect_drift(df)
+    def __call__(self, columns: List[str], rows: List[List[Any]]) -> Tuple[bool, NDArray]:
+        current_data = {column: [r[i] for r in rows] for i, column in enumerate(columns) if column in self.important_features}
 
-        X = self.transform(df)
-        return is_drift, self.predict(X)
+        is_drift = self.stattest.detect_drift_data(
+            reference_data=self.reference_data,
+            current_data=current_data,
+            feature_config=self.feature_config
+        )
+        
+        X = Pool(
+            data=[current_data[column] for column in self.important_features],
+            cat_features=[i for i, column in enumerate(self.important_features) if column in self.feature_config['category_columns']]
+        )
 
-    def predict(self, X: NDArray):
-        return self.model.predict(
+        predictions = self.model.predict(
             X,
             thread_count=3,
             verbose=False,
             task_type='CPU'
         )
-    
-    def detect_drift(self, df: pd.DataFrame) -> Tuple[bool, float]:
-        is_drift, drift_score = self.stattest.detect_drift_data(
-            reference_df=self.reference_data,
-            current_df=df,
-            feature_config=self.feature_config
 
-        )
-        return is_drift, drift_score
-    
-    def transform(self, df: pd.DataFrame):
-        for column in df.columns:
-            if column in self.category_transformer.columns:
-                df = self.category_transformer.transform(df, column=column)
-            elif column in self.numeric_transformer.columns:
-                df = self.numeric_transformer.transform(df, column=column)
-            else:
-                df = df.drop(columns=[column])
-        
-        return df.values
+        predictions = np.squeeze(predictions)
+        return is_drift, list(predictions)
     

@@ -36,13 +36,11 @@ def store_data(id: str, columns: List[str], rows: List[List[Any]], phase: str="p
     json_file.write_text(obj)
     
 async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor: Predictor) -> Output:
-    data = pd.DataFrame(rows, columns=columns)
-
     # output to return
-    is_drift, predictions = predictor(data)    
+    is_drift, predictions = predictor(columns=columns, rows=rows)    
     output = Output(
         id=id,
-        predictions=np.squeeze(predictions).tolist(),
+        predictions=predictions,
         drift=int(is_drift)
     )
 
