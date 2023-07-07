@@ -4,36 +4,16 @@ from pathlib import Path
 from data import load_tranformer
 from sklearn.cluster import OPTICS
 import time
-from sklearn.model_selection import StratifiedShuffleSplit
 import copy
+import ast
 
-def compute_metric(optics_result, Y):
-    REPORT = {}
+def transform_cat(X, columns):
+    X_ = copy.deepcopy(X)
+    for col in columns:
+        X_[col] = X_[col].astype("category")
+        X_[col] = X_[col].cat.codes
 
-    optics_clusters = np.unique(optics_result)
-    for optics_cluster in optics_clusters:
-        index = np.where(optics_result == optics_cluster)
-
-        unique, counts = np.unique(Y[index], return_counts=True)
-        counts = counts/sum(counts)
-
-        for label, count in zip(unique, counts):
-            if label not in REPORT:
-                REPORT[label] = []
-            
-            if count == max(counts):
-                REPORT[label].append(count)
-    
-    for key in REPORT.keys():
-        REPORT[key] = {
-            '>0.6': len([v for v in REPORT[key] if v >= 0.6])/len(REPORT[key]),
-            '>0.7': len([v for v in REPORT[key] if v >= 0.7])/len(REPORT[key]),
-            '>0.8': len([v for v in REPORT[key] if v >= 0.8])/len(REPORT[key]),
-            '>0.9': len([v for v in REPORT[key] if v >= 0.9])/len(REPORT[key])
-        }
-    
-    print("Total cluster: ", len(optics_clusters))
-    print(REPORT)
+    return X_
 
 def cluster(X):
     st = time.time()
@@ -45,64 +25,116 @@ def cluster(X):
 
     return optics_result
 
-def get_label(optics_result, Y):
+def get_threshold_label(optics_result, Y):
+    '''
+        Only use for labeled data
+    '''
+    REPORT = {}
+
+    # compute apperance rate of each label
+    optics_clusters = np.unique(optics_result)
+    for optics_cluster in optics_clusters:
+        index = np.where(optics_result == optics_cluster)
+
+        # count value for each label
+        unique, counts = np.unique(Y[index], return_counts=True)
+        counts = counts/sum(counts)
+
+        # get best label and appearance rate
+        for label, count in zip(unique, counts):
+            if label not in REPORT:
+                REPORT[label] = []
+            
+            if count == max(counts):
+                REPORT[label].append(count)
+
+    # get min threshold
+    for key in REPORT.keys():
+        if len(REPORT[key]) == 0:
+            REPORT[key] = 0.0
+        else:
+            REPORT[key] = min(REPORT[key])
+    
+    return REPORT
+
+def label_for_unseen(optics_result, Y, REPORT):
+    '''
+        Label for unseen label from labeld dataset
+    '''
     optics_clusters = np.unique(optics_result)
 
-    labels = {}
+    unseen_label_indexs = []
+    unseen_labels = []
     for optics_cluster in optics_clusters:
-        index = np.where(optics_result == optics_cluster)[0]
+        indexs = np.where(optics_result == optics_cluster)[0]
         
-        # get index which labeled or unlabeled
-        label_index   = index[index<len(Y)]
-        unlabel_index = index[index>=len(Y)]
+        # get label based on labeled data
+        labeled_indexs = indexs[indexs<len(Y)]
+        if len(labeled_indexs) == 0:
+            continue
 
-        # get label
-        unique, counts = np.unique(Y[label_index], return_counts=True)
+        ## compute apperance rate of each label
+        unique, counts = np.unique(Y[labeled_indexs], return_counts=True)
+        counts = counts/sum(counts)
+
+        ## get label and apperance rate
         label = unique[np.argmax(counts)]
+        rate  = max(counts)
 
-        for index in unlabel_index:
-            labels[index] = label
+        if rate >= REPORT[label]:
+            unlabel_index = indexs[indexs>=len(Y)]
+
+            # label for unseen
+            unseen_labels.extend([label for _ in unlabel_index])
+            unseen_label_indexs.extend(unlabel_index)
+
+    return unseen_label_indexs, unseen_labels
     
-    keys = list(labels)
-    keys.sort()
-
-    labels = [labels[k] for k in keys]
-    return labels
-
 def main(phase: str, problem: str):
     work_dir = Path(f"samples/{phase}/{problem}")
-    category_transformer = load_tranformer(work_dir/"transformer", "category_transformer")
+    feature_config = ast.literal_eval(
+        (work_dir/"train"/"features_config.json").read_text()
+    )
 
-    # get reference
-    refer_data = pandas.read_parquet(str(work_dir/"train"/"raw_train.parquet"), engine="pyarrow")
-    refer_data = refer_data.sample(frac=1, random_state=42).head(10)
+    # load labeled data
+    labeled_data = pandas.read_parquet(str(work_dir/"train"/"raw_train.parquet"), engine="pyarrow")
+    labeled_data = labeled_data.sample(frac=1, random_state=42).head(1000)
+
+    Y = labeled_data['label']
+
+    # ============================= TRAIN LABELED DATA ===========================================    
+    X = labeled_data.drop(columns=['label'])
+    X = transform_cat(X, feature_config['category_columns']) 
     
-    # get current_data
-    cur_data = pandas.concat(map(pandas.read_csv, (work_dir/"test"/"7_4_12_28").glob("*.csv"))).head(10)
+    result = cluster(X.values)
+    report = get_threshold_label(result, Y.values)
 
-    # full data
-    X_ = pandas.concat([refer_data.drop(columns=['label']), cur_data])
+    # ============================= TRAIN MIX LABLED and UNSEEN DATA ===========================================
+    unseen_data = pandas.concat(map(pandas.read_csv, (work_dir/"test"/"7_4_12_28").glob("*.csv"))).head(1000)
 
-    Y = refer_data['label']
-    X = copy.deepcopy(X_)
-    for col in category_transformer.columns:
-        X[col] = X[col].astype("category")
-        X[col] = X[col].cat.codes
+    X = pandas.concat([labeled_data.drop(columns=['label']), unseen_data])
+    X = transform_cat(X, feature_config['category_columns'])
 
     # clustering
     result = cluster(X.values)
-    labels = get_label(result, Y.values)
+    indexs, labels = label_for_unseen(result, Y.values, report)
 
-    # new training data
-    final_X = X_.values
-    final_Y = np.concatenate([Y, labels])
+    # setup labeled 
+    labeled_unseen_data_index    = [i-len(Y) for i in indexs]
+    labeled_unseen_data          = unseen_data.iloc[labeled_unseen_data_index, :]
+    labeled_unseen_data['label'] = labels
 
-    final = pandas.DataFrame(final_X, columns=X.columns)
-    final['label'] = final_Y
+    final = pandas.concat([labeled_data, labeled_unseen_data])
+    final = final.reset_index()
 
-    final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"))     
+    final.info()
+
+    print(final)
+    # final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
  
 main("phase-2","prob-2")
+main("phase-2","prob-1")
+
 
 
 
