@@ -121,16 +121,13 @@ def main(phase: str, problem: str):
 
     # setup labeled 
     labeled_unseen_data_index    = [i-len(Y) for i in indexs]
-    labeled_unseen_data          = unseen_data.iloc[labeled_unseen_data_index, :]
-    labeled_unseen_data['label'] = labels
+    labeled_unseen_data          = unseen_data.loc[labeled_unseen_data_index, :]
+    labeled_unseen_data["label"] = labels
 
     final = pandas.concat([labeled_data, labeled_unseen_data])
     final = final.reset_index()
 
-    final.info()
-
-    print(final)
-    # final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
+    final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
  
 main("phase-2","prob-2")
 main("phase-2","prob-1")
