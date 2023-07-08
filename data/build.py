@@ -2,7 +2,6 @@ import ast
 import pandas as pd
 from typing import Dict, Tuple, List, Any, Iterable
 from pathlib import Path
-from sklearn.model_selection import StratifiedShuffleSplit
 from numpy.typing import NDArray
 from .features import CategoryTransformer, NumericTransformer, save_tranformer
 from .drift import StatTest
@@ -32,18 +31,21 @@ class DataLoader:
         # get data
         self.data = pd.read_parquet(str(self.data_file), engine='pyarrow')
 
-    def __call__(self) -> Tuple[*NDArray]:
-        self.call()
+    def __call__(self, **args) -> Tuple[*NDArray]:
+        self.call(**args)
 
-    def call(self) -> Tuple[*NDArray]:        
+    def call(self, numeric_is_trans: bool=True, caterogy_is_trans: bool=True) -> Tuple[*NDArray]:        
         # transform
-        data = self.transform(data=self.data, feature_config=self.feature_config)
+        data = self.transform(data=self.data, feature_config=self.feature_config, numeric_is_trans=numeric_is_trans, caterogy_is_trans=caterogy_is_trans)
+        data = data.sample(frac=1, random_state=42)
         
-        kfold = self.split_data(data, self.feature_config['target_column'], 0.2, 42)
-
-        return kfold
+        # get X, Y
+        Y = data[self.feature_config['target_column']].values
+        X = data.drop(columns=[self.feature_config['target_column']]).values
+        
+        return X, Y
     
-    def transform(self, data: pd.DataFrame, feature_config: Dict):
+    def transform(self, data: pd.DataFrame, feature_config: Dict, numeric_is_trans: bool=True, caterogy_is_trans: bool=True):
         transformer_dir = self.work_dir/"transformer"
         transformer_dir.mkdir(exist_ok=True)
 
@@ -52,35 +54,26 @@ class DataLoader:
             feature_config['category_columns'].append(feature_config['target_column'])
 
         # tranform category
-        category_transformer = CategoryTransformer()
-        for column in feature_config['category_columns']:
-            category_transformer.get_category_index(data, column=column)
-            
-            data = category_transformer.transform(
-                data, 
-                column=column, 
-                is_onehot=False
-            )
+        if caterogy_is_trans:
+            category_transformer = CategoryTransformer()
+            for column in feature_config['category_columns']:
+                category_transformer.get_category_index(data, column=column)
+                
+                data = category_transformer.transform(
+                    data, 
+                    column=column, 
+                    is_onehot=False
+                )
         
-        save_tranformer(category_transformer, transformer_dir, f"category_transformer_{self.postfix}")
+            save_tranformer(category_transformer, transformer_dir, f"category_transformer{self.postfix}")
 
         # tranform numeric
-        numeric_transformer = NumericTransformer()
-        for column in feature_config['numeric_columns']:
-            numeric_transformer.get_numeric_distribution(data, column=column)
-            data = numeric_transformer.transform(data, column=column)
+        if numeric_is_trans:
+            numeric_transformer = NumericTransformer()
+            for column in feature_config['numeric_columns']:
+                numeric_transformer.get_numeric_distribution(data, column=column)
+                data = numeric_transformer.transform(data, column=column)
 
-        save_tranformer(numeric_transformer, transformer_dir, f"numeric_transformer_{self.postfix}")
+            save_tranformer(numeric_transformer, transformer_dir, f"numeric_transformer{self.postfix}")
 
         return data
-    
-    def split_data(self, data: pd.DataFrame, target_column: str, test_size: float=0.2, random_state=42) -> Iterable[*NDArray]:
-        data = data.sample(frac=1, random_state=random_state)
-        print(data.shape)
-        # get X, Y
-        Y = data[target_column].values
-        X = data.drop(columns=[target_column]).values
-
-        sss = StratifiedShuffleSplit(n_splits=5, test_size=test_size, random_state=random_state)
-        for (train_index, test_index) in sss.split(X, Y):
-            yield (X[train_index], X[test_index], Y[train_index], Y[test_index])
