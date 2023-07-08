@@ -33,7 +33,7 @@ def main_router(phase_id:int=1, prob_ids:List[int]=[1,2])->APIRouter:
     )
 
     for prob_id in prob_ids:
-        predictor = Predictor(phase=f"/phase-{phase_id}", problem=f"prob-{prob_id}")
+        predictor = Predictor(phase=f"/phase-{phase_id}", problem=f"prob-{prob_id}", fold="", postfix="")
         request(
             router,
             predictor=predictor, 

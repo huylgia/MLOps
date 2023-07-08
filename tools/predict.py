@@ -10,22 +10,28 @@ import pandas as pd
 from data import load_tranformer, StatTest
 
 class Predictor:
-    def __init__(self, phase: str, problem: str,  model_name: str="CatBoostClassifier") -> None:
+    def __init__(self, phase: str, problem: str,  model_name: str="CatBoostClassifier", postfix="_2", fold="4") -> None:
         self.work_dir = __dir__.parent/f"samples/{phase}/{problem}"
 
         # drift detector
         self.stattest = StatTest()
 
         # model
-        f = (self.work_dir/"model"/model_name/"model.pickle").open(mode="rb")
+        if fold:
+            f = (self.work_dir/"model"/f"{model_name}{postfix}"/fold/"model.pickle").open(mode="rb")
+        else:
+            f = (self.work_dir/"model"/f"{model_name}{postfix}"/"model.pickle").open(mode="rb")
         self.model = pickle.load(f)
 
         # get transformer
-        self.category_transformer = load_tranformer(self.work_dir/"transformer", "category_transformer")
-        self.numeric_transformer = load_tranformer(self.work_dir/"transformer", "numeric_transformer")
+        self.category_transformer = load_tranformer(self.work_dir/"transformer", f"category_transformer{postfix}")
+        self.numeric_transformer = load_tranformer(self.work_dir/"transformer", f"numeric_transformer{postfix}")
 
         # get importance feature
-        self.important_features = (self.work_dir/"model"/model_name/"feature_columns.txt").read_text().split("\n")
+        if fold:
+            self.important_features = (self.work_dir/"model"/f"{model_name}{postfix}"/fold/"feature_columns.txt").read_text().split("\n")
+        else:
+            self.important_features = (self.work_dir/"model"/f"{model_name}{postfix}"/"feature_columns.txt").read_text().split("\n")
 
         # get feature config
         self.feature_config = {
@@ -38,8 +44,8 @@ class Predictor:
 
     def __call__(self, df: pd.DataFrame) -> Tuple[bool, NDArray]:
         df = df[self.important_features]
-        is_drift, drift_score = self.detect_drift(df)
-
+        # is_drift, drift_score = self.detect_drift(df)
+        is_drift = True
         X = self.transform(df)
         return is_drift, self.predict(X)
 
