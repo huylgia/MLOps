@@ -1,25 +1,22 @@
 import pandas
 import numpy as np
 from pathlib import Path
-from data import load_tranformer
 from sklearn.cluster import OPTICS
 import time
-import copy
 import ast
 
 def transform_cat(X, columns):
-    X_ = copy.deepcopy(X)
     for col in columns:
-        X_[col] = X_[col].astype("category")
-        X_[col] = X_[col].cat.codes
+        X[col] = X[col].astype("category")
+        X[col] = X[col].cat.codes
 
-    return X_
+    return X
 
 def cluster(X):
     st = time.time()
 
     print("Start clustering")
-    optics_model = OPTICS(eps=0.3, min_samples=3, metric="minkowski", n_jobs=16, cluster_method="dbscan")
+    optics_model = OPTICS(eps=0.3, min_samples=3, metric="minkowski", n_jobs=24, cluster_method="dbscan")
     optics_result = optics_model.fit_predict(X)
     print("Take ", time.time()-st)
 
@@ -98,7 +95,7 @@ def main(phase: str, problem: str):
 
     # load labeled data
     labeled_data = pandas.read_parquet(str(work_dir/"train"/"raw_train.parquet"), engine="pyarrow")
-    labeled_data = labeled_data.sample(frac=1, random_state=42).head(1000)
+    labeled_data = labeled_data.sample(frac=1, random_state=42)
 
     Y = labeled_data['label']
 
@@ -108,9 +105,13 @@ def main(phase: str, problem: str):
     
     result = cluster(X.values)
     report = get_threshold_label(result, Y.values)
+    print(f"{phase}-{problem}: ", report)
 
     # ============================= TRAIN MIX LABLED and UNSEEN DATA ===========================================
-    unseen_data = pandas.concat(map(pandas.read_csv, (work_dir/"test"/"7_4_12_28").glob("*.csv"))).head(1000)
+    unseen_data = pandas.concat(map(pandas.read_csv, (work_dir/"test"/"7_4_12_28").glob("*.csv")))
+    unseen_data.dropna(inplace=True)
+    unseen_data.reset_index(inplace=True)
+    unseen_data.drop(columns=["index"], inplace=True)
 
     X = pandas.concat([labeled_data.drop(columns=['label']), unseen_data])
     X = transform_cat(X, feature_config['category_columns'])
@@ -125,7 +126,8 @@ def main(phase: str, problem: str):
     labeled_unseen_data["label"] = labels
 
     final = pandas.concat([labeled_data, labeled_unseen_data])
-    final = final.reset_index()
+    final.reset_index(inplace=True)
+    final.drop(columns=["index"], inplace=True)
 
     final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
  

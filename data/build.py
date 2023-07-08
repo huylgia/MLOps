@@ -1,14 +1,16 @@
 import ast
 import pandas as pd
-from typing import Dict, Tuple, List, Any
+from typing import Dict, Tuple, List, Any, Iterable
 from pathlib import Path
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedShuffleSplit
 from numpy.typing import NDArray
 from .features import CategoryTransformer, NumericTransformer, save_tranformer
 from .drift import StatTest
 
 class DataLoader:
-    def __init__(self, work_dir: Path, data_name: str="raw_train.parquet", features_config_name: str="features_config.json") -> None:
+    def __init__(self, work_dir: Path, postfix: str, data_name: str="raw_train.parquet", features_config_name: str="features_config.json") -> None:
+        self.postfix = postfix
+
         # create drift detector
         self.stattest = StatTest()
 
@@ -36,25 +38,11 @@ class DataLoader:
     def call(self) -> Tuple[*NDArray]:        
         # transform
         data = self.transform(data=self.data, feature_config=self.feature_config)
+        
+        kfold = self.split_data(data, self.feature_config['target_column'], 0.2, 42)
 
-        # split dataset
-        init_random_state = 10
-        while True:
-            X_train, X_val, Y_train, Y_val = self.split_data(data=data, target_column=self.feature_config['target_column'], test_size=0.2, random_state=init_random_state)
-
-            _, drift_data_score = self.stattest.detect_drift_data(
-                reference_df=pd.DataFrame(X_train, columns=data.columns[:-1]),
-                current_df=pd.DataFrame(X_val, columns=data.columns[:-1]),
-                feature_config=self.feature_config
-            )
-
-            if drift_data_score > 0:
-                init_random_state *= 2
-            else:
-                break
-
-        return X_train, X_val, Y_train, Y_val
-
+        return kfold
+    
     def transform(self, data: pd.DataFrame, feature_config: Dict):
         transformer_dir = self.work_dir/"transformer"
         transformer_dir.mkdir(exist_ok=True)
@@ -74,7 +62,7 @@ class DataLoader:
                 is_onehot=False
             )
         
-        save_tranformer(category_transformer, transformer_dir, "category_transformer")
+        save_tranformer(category_transformer, transformer_dir, f"category_transformer_{self.postfix}")
 
         # tranform numeric
         numeric_transformer = NumericTransformer()
@@ -82,15 +70,17 @@ class DataLoader:
             numeric_transformer.get_numeric_distribution(data, column=column)
             data = numeric_transformer.transform(data, column=column)
 
-        save_tranformer(numeric_transformer, transformer_dir, "numeric_transformer")
+        save_tranformer(numeric_transformer, transformer_dir, f"numeric_transformer_{self.postfix}")
 
         return data
     
-    def split_data(self, data: pd.DataFrame, target_column: str, test_size: float=0.2, random_state=42) -> Tuple[*NDArray]:
+    def split_data(self, data: pd.DataFrame, target_column: str, test_size: float=0.2, random_state=42) -> Iterable[*NDArray]:
         data = data.sample(frac=1, random_state=random_state)
-        
+        print(data.shape)
         # get X, Y
         Y = data[target_column].values
         X = data.drop(columns=[target_column]).values
 
-        return train_test_split(X, Y, test_size=test_size, random_state=random_state)    
+        sss = StratifiedShuffleSplit(n_splits=5, test_size=test_size, random_state=random_state)
+        for (train_index, test_index) in sss.split(X, Y):
+            yield (X[train_index], X[test_index], Y[train_index], Y[test_index])

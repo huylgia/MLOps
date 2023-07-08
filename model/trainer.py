@@ -29,5 +29,5 @@ class Trainer:
         self.model.fit(
             train_dataset,
             eval_set=val_dataset,
-            verbose=False
+            verbose=True
         )    
