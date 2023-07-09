@@ -1,5 +1,6 @@
 import pandas
 from typing import List, Mapping
+import numpy as np
 
 class CategoryTransformer:
     def __init__(self):
@@ -11,7 +12,7 @@ class CategoryTransformer:
         category_map = self.mapping[column]
         
         # tranform category into index
-        df[column] = df[column].apply(lambda x: category_map.index(x) if x in category_map else -1)
+        df[column] = df[column].apply(lambda x: category_map.index(x) if (x in category_map) and (x is not np.nan) else -1)
 
         # onehot encoding
         if is_onehot:
@@ -30,7 +31,7 @@ class CategoryTransformer:
 
         # get category index
         self.mapping[column] = df[column].cat.categories.tolist()
-
+        
         if column not in self.columns:
             self.columns.append(column)
 

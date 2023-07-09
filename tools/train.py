@@ -26,7 +26,7 @@ def run(phase: str, problem: str, model_name: str="CatBoostClassifier", postfix:
     trainer = Trainer(train_work_dir, args=args)
     # ======================= Train full features =======================
     trainer.initialize()
-    trainer.train(X, Y, cv=5, train_size=0.8)
+    trainer.train(X, Y, cv=5, train_size=0.9)
     
     # get feature important
     importance_scores = trainer.model.feature_importances_
@@ -38,7 +38,7 @@ def run(phase: str, problem: str, model_name: str="CatBoostClassifier", postfix:
         X[:, importance_feature_indexs], 
         Y, 
         cv=5, 
-        train_size=0.8
+        train_size=0.9
     )
 
     # ======================= Save weight =======================

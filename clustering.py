@@ -4,11 +4,14 @@ from pathlib import Path
 from sklearn.cluster import OPTICS
 import time
 import ast
+from sklearnex import patch_sklearn
+patch_sklearn()
 
 def transform_cat(X, columns):
     for col in columns:
         X[col] = X[col].astype("category")
         X[col] = X[col].cat.codes
+        X[col] = X[col].fillna(-1)
 
     return X
 
@@ -50,7 +53,7 @@ def get_threshold_label(optics_result, Y):
         if len(REPORT[key]) == 0:
             REPORT[key] = 0.0
         else:
-            REPORT[key] = min(REPORT[key])
+            REPORT[key] = min(max(REPORT[key]), 0.9)
     
     return REPORT
 
@@ -96,9 +99,9 @@ def main(phase: str, problem: str):
     # load labeled data
     labeled_data = pandas.read_parquet(str(work_dir/"train"/"raw_train.parquet"), engine="pyarrow")
     labeled_data = labeled_data.sample(frac=1, random_state=42)
+    labeled_data.drop_duplicates(inplace=True)
 
     Y = labeled_data['label']
-
     # ============================= TRAIN LABELED DATA ===========================================    
     X = labeled_data.drop(columns=['label'])
     X = transform_cat(X, feature_config['category_columns']) 
@@ -109,7 +112,8 @@ def main(phase: str, problem: str):
 
     # ============================= TRAIN MIX LABLED and UNSEEN DATA ===========================================
     unseen_data = pandas.concat(map(pandas.read_csv, (work_dir/"test"/"7_4_12_28").glob("*.csv")))
-    unseen_data.dropna(inplace=True)
+    unseen_data.drop_duplicates(inplace=True)
+
     unseen_data.reset_index(inplace=True)
     unseen_data.drop(columns=["index"], inplace=True)
 
