@@ -25,15 +25,9 @@ def store_data(id: str, columns: List[str], rows: List[List[Any]], phase: str="p
     store_dir.mkdir(exist_ok=True, parents=True)
 
     # file to store data
-    json_file = store_dir/f"{id}.json"
-    data = {
-        'id': id,
-        'columns': columns,
-        'rows': rows,
-    }
-    
-    obj = json.dumps(data, indent=4)
-    json_file.write_text(obj)
+    csv_file = store_dir/f"{id}.csv"
+    df = pd.DataFrame(rows, columns=columns)
+    df.to_csv(csv_file, index=None)
     
 async def predict(id: str, columns: List[str], rows: List[List[Any]], predictor: Predictor) -> Output:
     data = pd.DataFrame(rows, columns=columns)

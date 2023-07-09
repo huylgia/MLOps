@@ -10,17 +10,14 @@ import pandas as pd
 from data import load_tranformer, StatTest
 
 class Predictor:
-    def __init__(self, phase: str, problem: str,  model_name: str="CatBoostClassifier", postfix="_2", fold="4") -> None:
+    def __init__(self, phase: str, problem: str,  model_name: str="CatBoostClassifier", postfix="_2") -> None:
         self.work_dir = __dir__.parent/f"samples/{phase}/{problem}"
 
         # drift detector
         self.stattest = StatTest()
 
         # model
-        if fold:
-            f = (self.work_dir/"model"/f"{model_name}{postfix}"/fold/"model.pickle").open(mode="rb")
-        else:
-            f = (self.work_dir/"model"/f"{model_name}{postfix}"/"model.pickle").open(mode="rb")
+        f = (self.work_dir/"model"/f"{model_name}{postfix}"/"model.pickle").open(mode="rb")
         self.model = pickle.load(f)
 
         # get transformer
@@ -28,10 +25,7 @@ class Predictor:
         self.numeric_transformer = load_tranformer(self.work_dir/"transformer", f"numeric_transformer{postfix}")
 
         # get importance feature
-        if fold:
-            self.important_features = (self.work_dir/"model"/f"{model_name}{postfix}"/fold/"feature_columns.txt").read_text().split("\n")
-        else:
-            self.important_features = (self.work_dir/"model"/f"{model_name}{postfix}"/"feature_columns.txt").read_text().split("\n")
+        self.important_features = (self.work_dir/"model"/f"{model_name}{postfix}"/"feature_columns.txt").read_text().split("\n")
 
         # get feature config
         self.feature_config = {
@@ -41,10 +35,12 @@ class Predictor:
 
         # refenence data
         self.reference_data = pd.read_parquet(str(self.work_dir/"train"/"raw_train.parquet"), engine="pyarrow")[self.important_features]
+        self.reference_data.drop_duplicates(inplace=True)
 
     def __call__(self, df: pd.DataFrame) -> Tuple[bool, NDArray]:
         df = df[self.important_features]
-        # is_drift, drift_score = self.detect_drift(df)
+        # is_drift, drift_score = self.detect_drift(df.drop_duplicates())
+
         is_drift = True
         X = self.transform(df)
         return is_drift, self.predict(X)
