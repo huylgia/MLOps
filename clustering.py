@@ -4,6 +4,7 @@ from pathlib import Path
 from sklearn.cluster import OPTICS
 import time
 import ast
+from data.utils import handle_duplicate
 from sklearnex import patch_sklearn
 patch_sklearn()
 
@@ -53,7 +54,7 @@ def get_threshold_label(optics_result, Y):
         if len(REPORT[key]) == 0:
             REPORT[key] = 0.0
         else:
-            REPORT[key] = min(max(REPORT[key]), 0.9)
+            REPORT[key] = min(max(REPORT[key]), 0.6)
     
     return REPORT
 
@@ -99,7 +100,7 @@ def main(phase: str, problem: str):
     # load labeled data
     labeled_data = pandas.read_parquet(str(work_dir/"train"/"raw_train.parquet"), engine="pyarrow")
     labeled_data = labeled_data.sample(frac=1, random_state=42)
-    labeled_data.drop_duplicates(inplace=True)
+    labeled_data = handle_duplicate(labeled_data)
 
     Y = labeled_data['label']
     # ============================= TRAIN LABELED DATA ===========================================    
@@ -132,6 +133,10 @@ def main(phase: str, problem: str):
     final = pandas.concat([labeled_data, labeled_unseen_data])
     final.reset_index(inplace=True)
     final.drop(columns=["index"], inplace=True)
+
+    print("Before drop duplicate: ", final.shape)
+    final = handle_duplicate(final)
+    print("After drop duplicate: ", final.shape)
 
     final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
  

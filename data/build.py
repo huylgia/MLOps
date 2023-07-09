@@ -5,6 +5,7 @@ from pathlib import Path
 from numpy.typing import NDArray
 from .features import CategoryTransformer, NumericTransformer, save_tranformer
 from .drift import StatTest
+from .utils import handle_duplicate
 
 class DataLoader:
     def __init__(self, work_dir: Path, postfix: str, data_name: str="raw_train.parquet", features_config_name: str="features_config.json") -> None:
@@ -30,7 +31,7 @@ class DataLoader:
 
         # get data
         self.data = pd.read_parquet(str(self.data_file), engine='pyarrow')
-        self.data.drop_duplicates(inplace=True)
+        self.data = handle_duplicate(self.data)
         
     def __call__(self, **args) -> Tuple[*NDArray]:
         self.call(**args)
