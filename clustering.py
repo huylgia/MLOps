@@ -20,45 +20,13 @@ def cluster(X):
     st = time.time()
 
     print("Start clustering")
-    optics_model = OPTICS(eps=0.3, min_samples=3, metric="minkowski", n_jobs=24, cluster_method="dbscan")
+    optics_model = OPTICS(eps=0.3, min_samples=3, metric="minkowski", n_jobs=16, cluster_method="dbscan")
     optics_result = optics_model.fit_predict(X)
     print("Take ", time.time()-st)
 
     return optics_result
 
-def get_threshold_label(optics_result, Y):
-    '''
-        Only use for labeled data
-    '''
-    REPORT = {}
-
-    # compute apperance rate of each label
-    optics_clusters = np.unique(optics_result)
-    for optics_cluster in optics_clusters:
-        index = np.where(optics_result == optics_cluster)
-
-        # count value for each label
-        unique, counts = np.unique(Y[index], return_counts=True)
-        counts = counts/sum(counts)
-
-        # get best label and appearance rate
-        for label, count in zip(unique, counts):
-            if label not in REPORT:
-                REPORT[label] = []
-            
-            if count == max(counts):
-                REPORT[label].append(count)
-
-    # get min threshold
-    for key in REPORT.keys():
-        if len(REPORT[key]) == 0:
-            REPORT[key] = 0.0
-        else:
-            REPORT[key] = min(max(REPORT[key]), 0.6)
-    
-    return REPORT
-
-def label_for_unseen(optics_result, Y, REPORT):
+def label_for_unseen(optics_result, Y, threshold=0.9):
     '''
         Label for unseen label from labeld dataset
     '''
@@ -82,7 +50,7 @@ def label_for_unseen(optics_result, Y, REPORT):
         label = unique[np.argmax(counts)]
         rate  = max(counts)
 
-        if rate >= REPORT[label]:
+        if rate >= threshold:
             unlabel_index = indexs[indexs>=len(Y)]
 
             # label for unseen
@@ -98,47 +66,59 @@ def main(phase: str, problem: str):
     )
 
     # load labeled data
+    print("Load labeled data")
     labeled_data = pandas.read_parquet(str(work_dir/"train"/"raw_train.parquet"), engine="pyarrow")
     labeled_data = labeled_data.sample(frac=1, random_state=42)
     labeled_data = handle_duplicate(labeled_data)
 
-    Y = labeled_data['label']
-    # ============================= TRAIN LABELED DATA ===========================================    
-    X = labeled_data.drop(columns=['label'])
-    X = transform_cat(X, feature_config['category_columns']) 
-    
-    result = cluster(X.values)
-    report = get_threshold_label(result, Y.values)
-    print(f"{phase}-{problem}: ", report)
+    # reset index
+    labeled_data.reset_index(inplace=True)
+    labeled_data.drop(columns=["index"], inplace=True)
 
-    # ============================= TRAIN MIX LABLED and UNSEEN DATA ===========================================
+    # load unseen data
+    print("Load unseen data")
     unseen_data = pandas.concat(map(pandas.read_csv, (work_dir/"test"/"7_4_12_28").glob("*.csv")))
-    unseen_data.drop_duplicates(inplace=True)
+    unseen_data['label'] = np.nan
 
-    unseen_data.reset_index(inplace=True)
-    unseen_data.drop(columns=["index"], inplace=True)
+    # ============== clustered_data ==============
+    clustered_data = pandas.concat([labeled_data, unseen_data])
+    clustered_data.reset_index(inplace=True)
+    clustered_data.drop(columns=["index"], inplace=True)
 
-    X = pandas.concat([labeled_data.drop(columns=['label']), unseen_data])
-    X = transform_cat(X, feature_config['category_columns'])
+    # drop duplicates
+    clustered_data.drop_duplicates(inplace=True)
+    clustered_data.reset_index(inplace=True)
+    clustered_data.drop(columns=["index"], inplace=True)
+
+    # ============== Y ==============
+    Y = clustered_data['label'].dropna()
+    X = clustered_data.drop(columns=['label'])
+    print(X.shape)
+    print(Y.shape)
+
+    # transform x
+    X_tranform = transform_cat(X, feature_config['category_columns'])
 
     # clustering
-    result = cluster(X.values)
-    indexs, labels = label_for_unseen(result, Y.values, report)
+    result = cluster(X_tranform.values)
+    indexs, labels = label_for_unseen(result, Y.values, threshold=0.9)
+
+    print(len(labels))
 
     # setup labeled 
-    labeled_unseen_data_index    = [i-len(Y) for i in indexs]
-    labeled_unseen_data          = unseen_data.loc[labeled_unseen_data_index, :]
-    labeled_unseen_data["label"] = labels
+    clustered_data['label'] = np.nan
+    clustered_data.loc[indexs, 'label'] = labels
+    clustered_data.loc[list(Y.index), 'label'] = Y.values
 
-    final = pandas.concat([labeled_data, labeled_unseen_data])
-    final.reset_index(inplace=True)
-    final.drop(columns=["index"], inplace=True)
+    print(clustered_data.shape)
+    # reset index
+    clustered_data = clustered_data[~clustered_data['label'].isna()]
+    print(clustered_data.shape)
 
-    print("Before drop duplicate: ", final.shape)
-    final = handle_duplicate(final)
-    print("After drop duplicate: ", final.shape)
+    clustered_data.reset_index(inplace=True)
+    clustered_data.drop(columns=["index"], inplace=True)
 
-    final.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
+    clustered_data.to_parquet(str(work_dir/"train"/"raw_train_2.parquet"), index=None)     
  
 main("phase-2","prob-2")
 main("phase-2","prob-1")

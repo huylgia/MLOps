@@ -7,8 +7,12 @@ def handle_duplicate(data: pd.DataFrame):
 
     # get duplicated value
     duplicated = data[data.duplicated(keep=False)]
-    duplicated['label'] = labels[duplicated.index]
-    duplicated['index'] = duplicated.index
+    if len(duplicated) == 0:
+        data['labels'] = labels
+        return data
+    
+    duplicated['label'] = labels.values[list(duplicated.index)]
+    duplicated['index'] = list(duplicated.index)
 
     # aggerate labels of each duplicated
     agg = duplicated.groupby(list(duplicated.columns[:-2])).agg(list)

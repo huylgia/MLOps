@@ -48,5 +48,5 @@ def run(phase: str, problem: str, model_name: str="CatBoostClassifier", postfix:
     (train_work_dir/f"feature_columns.txt").write_text("\n".join(importance_columns))
 
 if __name__ == "__main__":
-    run("phase-2", "prob-1", postfix="_2", data_name="raw_train_2.parquet")
     run("phase-2", "prob-2", postfix="_2", data_name="raw_train_2.parquet")
+    # run("phase-2", "prob-1", postfix="_1.1", data_name="raw_train.parquet")

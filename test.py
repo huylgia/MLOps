@@ -17,7 +17,6 @@ for (lb, index) in agg.values:
     if len(np.unique(lb)) > 1:
         data.drop(index=index, inplace=True)
 
-print(data.shape)
 
 data.drop_duplicates(inplace=True)
 data['label'] = label.values[list(data.index)]

@@ -31,6 +31,9 @@ class DataLoader:
 
         # get data
         self.data = pd.read_parquet(str(self.data_file), engine='pyarrow')
+        self.data.reset_index(inplace=True)
+        self.data.drop(columns=["index"], inplace=True)
+        
         self.data = handle_duplicate(self.data)
         
     def __call__(self, **args) -> Tuple[*NDArray]:
