@@ -31,15 +31,15 @@ class DataLoader:
 
         # get data
         self.data = pd.read_parquet(str(self.data_file), engine='pyarrow')
-        self.data.reset_index(inplace=True)
-        self.data.drop(columns=["index"], inplace=True)
+        # self.data.reset_index(inplace=True)
+        # self.data.drop(columns=["index"], inplace=True)
         
-        self.data = handle_duplicate(self.data)
+        # self.data = handle_duplicate(self.data)
         
-    def __call__(self, **args) -> Tuple[*NDArray]:
+    def __call__(self, **args) -> Tuple[NDArray]:
         self.call(**args)
 
-    def call(self, numeric_is_trans: bool=True, caterogy_is_trans: bool=True) -> Tuple[*NDArray]:        
+    def call(self, numeric_is_trans: bool=True, caterogy_is_trans: bool=True) -> Tuple[NDArray]:        
         # transform
         data = self.transform(data=self.data, feature_config=self.feature_config, numeric_is_trans=numeric_is_trans, caterogy_is_trans=caterogy_is_trans)
         data = data.sample(frac=1, random_state=42)
